@@ -1,0 +1,71 @@
+# SPDX-FileCopyrightText: 2023 Eduardo Robles <edu@sequentech.io>
+#
+# SPDX-License-Identifier: AGPL-3.0-only
+
+version: "3.6"
+services:
+  devcontainer:
+    image: ghcr.io/cachix/devenv:latest
+    volumes:
+      - ../..:/workspaces:cached
+    security_opt:
+      - label:disable
+    environment:
+      # postgres database to store Hasura metadata
+      HASURA_GRAPHQL_METADATA_DATABASE_URL: postgres://postgres:postgrespassword@postgres:5432/postgres
+      # this env var can be used to add the above postgres database to Hasura 
+      # as a data source. this can be removed/updated based on your needs
+      PG_DATABASE_URL: postgres://postgres:postgrespassword@postgres:5432/postgres
+
+  postgres_keycloak:
+    image: postgres:15
+    restart: unless-stopped
+    volumes:
+      - keycloak_db_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: postgrespassword
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready  -U postgres"]
+      interval: 5s
+      timeout: 10s
+      retries: 15
+      start_period: 5s
+
+  keycloak:
+    build:
+      context: ./keycloak
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - 8090:8090
+    environment:
+      KC_HOSTNAME: "127.0.0.1"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_PORT: "8090"
+      KC_DB_USERNAME: postgres
+      KC_DB_PASSWORD: postgrespassword
+      KC_DB_SCHEMA: public
+      KC_DB_URL: jdbc:postgresql://postgres_keycloak:5432/postgres
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    entrypoint: >
+      /opt/keycloak/bin/kc.sh start-dev
+      --features=preview
+      -Dkeycloak.profile.feature.upload_scripts=enabled
+      --import-realm
+    depends_on:
+      postgres_keycloak:
+        condition: service_healthy
+
+volumes:
+  db_data:
+  db_logs:
+  immudb_log_audit_data:
+  keycloak_db_data:
+  immudb_data:
+  immudb_logs:
+  minio_storage:
+  trustee1_data:
+  trustee2_data:
+  protocol_manager_data:
+  vault-volume:
